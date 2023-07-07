@@ -1,0 +1,1 @@
+/usr/bin/c++ -rdynamic CMakeFiles/bundle_adjustment_in_the_large_example.dir/bundle_adjustment_in_the_large.o -o ../bin/examples/bundle_adjustment_in_the_large_example   -L/home/ckengjwe/dso/symforce/symforce/examples/robot_3d_localization  -lsymforce_gen -lsymforce_opt ../libsymforce_examples.a -lsymforce_gen -lsymforce_opt 

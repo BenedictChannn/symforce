@@ -1,0 +1,2 @@
+/usr/bin/ar qc libsymforce_examples.a CMakeFiles/symforce_examples.dir/gen/measurements.o CMakeFiles/symforce_examples.dir/run_dynamic_size.o CMakeFiles/symforce_examples.dir/run_fixed_size.o
+/usr/bin/ranlib libsymforce_examples.a

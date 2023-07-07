@@ -9,7 +9,7 @@
 #include <lcmtypes/sym/optimizer_params_t.hpp>
 
 #include <sym/pose3.h>
-#include <symforce/examples/robot_3d_localization/gen/measurements.h>
+#include "./gen/measurements.h"
 #include <symforce/opt/key.h>
 #include <symforce/opt/optimizer.h>
 #include <symforce/opt/values.h>
