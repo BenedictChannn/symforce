@@ -18,37 +18,35 @@ namespace toy_example {
  * Args:
  *     x: Scalar
  *     y: Scalar
- *     c: Scalar
  *
  * Outputs:
  *     res: Matrix11
  *     jacobian: (1x2) jacobian of res wrt args x (1), y (1)
  */
 template <typename Scalar>
-void ToyResidualWithJacobians01(const Scalar x, const Scalar y, const Scalar c,
-                                Eigen::Matrix<Scalar, 1, 1>* const res = nullptr,
-                                Eigen::Matrix<Scalar, 1, 2>* const jacobian = nullptr) {
-  // Total ops: 22
+void ToyResidualWithJacobians(const Scalar x, const Scalar y,
+                              Eigen::Matrix<Scalar, 1, 1>* const res = nullptr,
+                              Eigen::Matrix<Scalar, 1, 2>* const jacobian = nullptr) {
+  // Total ops: 15
 
   // Input arrays
 
-  // Intermediate terms (3)
-  const Scalar _tmp0 = 2 * std::min<Scalar>(0, (((c) > 0) - ((c) < 0))) + 1;
-  const Scalar _tmp1 = (Scalar(1) / Scalar(5)) * x + Scalar(-2) / Scalar(5);
-  const Scalar _tmp2 = Scalar(0.10000000000000001) * y + Scalar(0.20000000000000001);
+  // Intermediate terms (2)
+  const Scalar _tmp0 = (Scalar(1) / Scalar(5)) * x + Scalar(-2) / Scalar(5);
+  const Scalar _tmp1 = Scalar(0.10000000000000001) * y + Scalar(0.20000000000000001);
 
   // Output terms (2)
   if (res != nullptr) {
     Eigen::Matrix<Scalar, 1, 1>& _res = (*res);
 
-    _res(0, 0) = _tmp0 * (-Scalar(0.5) * std::sin(_tmp1) + Scalar(1.0) * std::sin(_tmp2) + 3);
+    _res(0, 0) = -Scalar(0.5) * std::sin(_tmp0) + Scalar(1.0) * std::sin(_tmp1) + 3;
   }
 
   if (jacobian != nullptr) {
     Eigen::Matrix<Scalar, 1, 2>& _jacobian = (*jacobian);
 
-    _jacobian(0, 0) = -Scalar(0.10000000000000001) * _tmp0 * std::cos(_tmp1);
-    _jacobian(0, 1) = Scalar(0.10000000000000001) * _tmp0 * std::cos(_tmp2);
+    _jacobian(0, 0) = -Scalar(0.10000000000000001) * std::cos(_tmp0);
+    _jacobian(0, 1) = Scalar(0.10000000000000001) * std::cos(_tmp1);
   }
 }  // NOLINT(readability/fn_size)
 

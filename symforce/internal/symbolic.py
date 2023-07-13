@@ -383,7 +383,7 @@ def sign_no_zero(x: Scalar) -> Scalar:
     """
     Returns -1 if x is negative, 1 if x is positive, and 1 if x is zero.
     """
-    return 2 * Min(sign(x - threshold), 0) + 1
+    return 2 * Min(sign(x), 0) + 1
 
 
 
