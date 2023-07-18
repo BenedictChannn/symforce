@@ -5,6 +5,9 @@
 
 #include "./gen/toy_residual_with_jacobians.h"
 
+#include <fstream>
+#include <vector>
+
 namespace toy_example {
 
     // Create a factor object
@@ -56,6 +59,31 @@ namespace toy_example {
 
         spdlog::info("Initial error: {}", first_iter.new_error);
         spdlog::info("Final error: {}", best_iter.new_error);
+
+        std::ifstream file("/home/ckengjwe/ThisIsMe.txt");
+        std::string string;
+        std::getline(file, string);
+        spdlog::info(string);
+
+        std::vector<double> mask_values;
+        std::getline(file, string);
+        string.erase(std::remove(string.begin(), string.end(), '['), string.end());
+        string.erase(std::remove(string.begin(), string.end(), ']'), string.end());
+
+        std::istringstream iss(string);
+        double value;
+        while (iss >> value) {
+            mask_values.push_back(value);
+            iss.ignore();
+        }
+
+        const double* mask = mask_values.data();
+        std::size_t num_elements = mask_values.size();
+        for (std::size_t i = 0; i < num_elements; i++) {
+            spdlog::info(mask[i]);
+        }
+        file.close();
+        
     }
 
 

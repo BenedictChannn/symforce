@@ -1,51 +1,27 @@
 import symforce
 symforce.set_epsilon_to_symbol()
 
-import cv2 as cv
 import symforce.symbolic as sf
 from pathlib import Path
 
 from symforce import codegen
 from symforce.ops import StorageOps
 
-# def cayley2rot(cayley: sf.V3) -> sf.M33:
-#     # TODO
-#     # Rewrite this using the eqn R = ((1 - C^T * C) * eye + 2 * C * C^T + 2[c]) / (1 + C^T * C)
-#     # Where[c] is the skew symmetric matrix of c: can use skew_symmetric(a: sf.V3) function from matrix.py 
-#     c0, c1, c2 = cayley
-#     rot = sf.M33(
-#         [
-#             [
-#                 1.0 + (c0 * c0) - (c1 * c1) - (c2 * c2),
-#                 2 * (c0 * c1 - c2),
-#                 2 * (c0 * c2 + c1),
-#             ],
-#             [
-#                 2 * (c0 * c1 + c2),
-#                 1.0 - (c0 * c0) + (c1 * c1) - (c2 * c2),
-#                 2 * (c1 * c2 - c0),
-#             ],
-#             [
-#                 2 * (c0 * c2 - c1),
-#                 2 * (c1 * c2 + c0),
-#                 1.0 - (c0 * c0) - (c1 * c1) + (c2 * c2),
-#             ],
-#         ]
-#     )
-
-#     rot = (1.0 / (1.0 + (c0 * c0) + (c1 * c1) + (c2 * c2))) * rot
-#     return rot
 
 def cayley2rot(cayley: sf.V3) -> sf.M33:
-    eye = sf.Matrix.eye(3, 3)
+    eye = sf.M33.eye()
     skew_c = sf.Matrix.skew_symmetric(cayley)
     c0, c1, c2 = cayley
     AtA = c0 * c0 + c1 * c1 + c2 * c2 # Tried to use compute_AtA but output is a sf.M11 and (1 +- sf.M11) will have error 
 
     # R = ((1 - C^T * C) * eye + 2 * C * C^T + 2[c]) / (1 + C^T * C)
     R = sf.M33()
-    R = ((1 - AtA) * eye + 2 * cayley * cayley.transpose() + 2 * skew_c) / (1 + AtA)
-    R = StorageOps.simplify(R) # E.g. (1 - (x0^2 + x1^2 + x2^2) + 2 x0^2) ---simplify--> (1 + x0^2 - x1^2 - x2^2)
+    R = ((1.0 - AtA) * eye + 2 * cayley * cayley.transpose() + 2 * skew_c) / (1.0 + AtA)
+
+    ## Decided to not simplify R so as to use symengine instead of sympy. (Supposed to be faster)
+    ## Results without simplifying is still the same.
+    # R = StorageOps.simplify(R) # E.g. (1 - (x0^2 + x1^2 + x2^2) + 2 x0^2) ---simplify--> (1 + x0^2 - x1^2 - x2^2)
+
     # Take note "symbolic.simplify():493 WARNING -- Converting to sympy to use .simplify"
     # This could slow down/ cause some errors in future by not using symengine
 
@@ -55,7 +31,7 @@ def get_warp_transformation(
         x: sf.V6,
         R_: sf.M33,
         t_: sf.V3,
-) -> sf.M34:
+) -> sf.M44:
     dc = x[:3] # cayley parameters
     dt = x[3:] # translation
 
@@ -66,7 +42,7 @@ def get_warp_transformation(
     q_cur_ref_normalized = sf.Rot3(q_cur_ref.q / sf.sqrt(q_cur_ref.q.squared_norm()))
     R_cur_ref_normalized = q_cur_ref_normalized.to_rotation_matrix()
 
-    warpingTransformation = sf.M34()
+    warpingTransformation = sf.M44.eye()
     warpingTransformation[:3, :3] = R_cur_ref_normalized
     warpingTransformation[:3, 3] = -R_cur_ref_normalized * (dt + dR * t_)
     return warpingTransformation
@@ -109,17 +85,15 @@ def is_valid_1x1(
     return sf.logical_and(
         sf.logical_not(
             sf.logical_or(
-                sf.is_nonpositive(patch_x), sf.greater(patch_x, width_ - 2), sf.is_nonpositive(patch_y), sf.greater(patch_y, height_ - 2),
+                sf.is_nonpositive(patch_x), sf.greater(patch_x, width_ - 2), 
+                sf.is_nonpositive(patch_y), sf.greater(patch_y, height_ - 2),
                 unsafe = True
             ),
             unsafe = True
         ),
-        sf.less(mask[patch_y * img_col + patch_x], 125),
+        sf.greater_equal(mask[patch_y * img_col + patch_x], 125),
         unsafe = True
     )
-
-
-
 
 # def patchInterpolation(
 #         img_row: sf.Scalar, img_col: sf.Scalar, 
@@ -162,17 +136,23 @@ def is_valid_1x1(
 #     patch = q3 * R[:wy, :wx] + q4 * R[1:wy + 1, :wx]
 #     return patch
 
-def patch_interpolation_1x1(
-        img_cols: sf.Scalar,
-        TsObs: sf.DataBuffer("TimeSurfaceObservation"),
+def valid_interpolation(
         pixel: sf.V2,
+        img_cols, img_rows,
 ) -> sf.Scalar:
     pixel_x, pixel_y = sf.floor(pixel[0]), sf.floor(pixel[1])
-    ts_value = TsObs[img_cols * pixel_y + pixel_x]
-    return ts_value
+
+    return sf.logical_not(
+        sf.logical_or(
+            sf.greater_equal(pixel_x, img_cols),
+            sf.greater_equal(pixel_y, img_rows),
+            unsafe = True            
+        ),
+        unsafe = True
+    )
 
 def bilinear_interpolation_1x1(
-        img_cols: sf.Scalar, 
+        img_cols: sf.Scalar,
         TsObs: sf.DataBuffer("TimeSurfaceObservation"),
         pixel: sf.V2,
 ) -> sf.Scalar:
@@ -187,7 +167,7 @@ def bilinear_interpolation_1x1(
 
     linear_y0 = q1 * TsObs[pixel_y_floor * img_cols + pixel_x_floor] + q2 * TsObs[pixel_y_floor * img_cols + pixel_x_floor + 1]
     linear_y1 = q1 * TsObs[(pixel_y_floor + 1) * img_cols + pixel_x_floor] + q2 * TsObs[(pixel_y_floor + 1) * img_cols + pixel_x_floor + 1]
-    ts_value = q4 * linear_y0 + q3 * linear_y1
+    ts_value = q3 * linear_y1 + q4 * linear_y0
 
     return ts_value
 
@@ -200,9 +180,9 @@ def spatio_temporal_residual(
         point: sf.V3,
         R_cam: sf.M33,
         t_cam: sf.V3,
-        wx: sf.Scalar, wy: sf.Scalar,
         width_: sf.Scalar, height_: sf.Scalar,
-        mask_col: sf.Scalar, Ts_col: sf.Scalar, 
+        mask_col: sf.Scalar, 
+        Ts_col: sf.Scalar, Ts_row: sf.Scalar,
         mask: sf.DataBuffer("cameraMask"),
         TsObs: sf.DataBuffer("TimeSurfaceObservation")
 ) -> sf.V1:
@@ -218,21 +198,25 @@ def spatio_temporal_residual(
     # Find the corresponding TS value
     ts_value = bilinear_interpolation_1x1(Ts_col, TsObs, pixel_left_curr)
 
+    max_ts_value = 255.0
+    # Check if interpolation was valid
+    flag = valid_interpolation(pixel_left_curr, Ts_col, Ts_row)
+    ts_value = flag * ts_value + (1 - flag) * max_ts_value
+
+    # Check if reprojection previously was valid
+    valid_flag = is_valid_1x1(width_, height_, mask_col, pixel_left_curr, mask)
+    ts_value = valid_flag * ts_value + (1 - valid_flag) * max_ts_value
+
     # Huber norm implementation
     huber_threshold = 50.0
     condition = sf.greater(ts_value, huber_threshold) # Returns 1 if ts_value > huber threshold, 0 otherwise
     ts_value = condition * sf.sqrt(huber_threshold / ts_value) * ts_value + (1 - condition) * ts_value
 
-    # Check if reprojection previously was valid
-    # max_ts_value = 255.0
-    # valid_flag = is_valid_1x1(width_, height_, mask_col, pixel_left_curr, mask)
-    # ts_value = valid_flag * ts_value + (1 - valid_flag) * max_ts_value
-
     return sf.V1(ts_value)
 
 
 def generate(output_dir: Path) -> None:
-    codegen.Codegen.function(spatio_temporal_residual, config = codegen.CppConfig()).with_linearization(
+    codegen.Codegen.function(spatio_temporal_residual, config = codegen.CppConfig(), name = "Residual").with_linearization(
         which_args = ['x']
     ).generate_function(output_dir = output_dir, namespace = 'event_res', skip_directory_nesting = True)
 
