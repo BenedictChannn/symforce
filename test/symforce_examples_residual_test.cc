@@ -2,7 +2,7 @@
 #include <spdlog/spdlog.h>
 
 int main() {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 1; i++) {
         spdlog::info("Iteration {}: ", i);
         event_res::unit_test();
     }

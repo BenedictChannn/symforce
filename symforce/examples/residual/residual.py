@@ -15,15 +15,8 @@ def cayley2rot(cayley: sf.V3) -> sf.M33:
     AtA = c0 * c0 + c1 * c1 + c2 * c2 # Tried to use compute_AtA but output is a sf.M11 and (1 +- sf.M11) will have error 
 
     # R = ((1 - C^T * C) * eye + 2 * C * C^T + 2[c]) / (1 + C^T * C)
-    R = sf.M33()
+    R = sf.M33.eye()
     R = ((1.0 - AtA) * eye + 2 * cayley * cayley.transpose() + 2 * skew_c) / (1.0 + AtA)
-
-    ## Decided to not simplify R so as to use symengine instead of sympy. (Supposed to be faster)
-    ## Results without simplifying is still the same.
-    # R = StorageOps.simplify(R) # E.g. (1 - (x0^2 + x1^2 + x2^2) + 2 x0^2) ---simplify--> (1 + x0^2 - x1^2 - x2^2)
-
-    # Take note "symbolic.simplify():493 WARNING -- Converting to sympy to use .simplify"
-    # This could slow down/ cause some errors in future by not using symengine
 
     return R
 
@@ -32,45 +25,23 @@ def get_warp_transformation(
         R_: sf.M33,
         t_: sf.V3,
 ) -> sf.M44:
-    dc = x[:3] # cayley parameters
+    dc = x[:3] # cayley parameters    
     dt = x[3:] # translation
 
     dR = cayley2rot(dc)
     R_cur_ref = R_.transpose() * dR.transpose() 
-    # Normalize
-    q_cur_ref = sf.Rot3.from_rotation_matrix(R_cur_ref) 
-    q_cur_ref_normalized = sf.Rot3(q_cur_ref.q / sf.sqrt(q_cur_ref.q.squared_norm()))
-    R_cur_ref_normalized = q_cur_ref_normalized.to_rotation_matrix()
+
+    # # Normalize
+    # q_cur_ref = sf.Rot3.from_rotation_matrix(R_cur_ref)
+    # q_cur_ref_normalized = sf.Rot3(q_cur_ref.q / (sf.sqrt(q_cur_ref.q.squared_norm())))
+    # R_cur_ref_normalized = q_cur_ref_normalized.to_rotation_matrix()
 
     warpingTransformation = sf.M44.eye()
-    warpingTransformation[:3, :3] = R_cur_ref_normalized
-    warpingTransformation[:3, 3] = -R_cur_ref_normalized * (dt + dR * t_)
+    warpingTransformation[:3, :3] = R_cur_ref
+    warpingTransformation[:3, 3] = -R_cur_ref * (dt + dR * t_)
     return warpingTransformation
     
 
-
-
-# def is_valid(
-#         wx: sf.Scalar,
-#         wy: sf.Scalar,
-#         width_: sf.Scalar,
-#         height_: sf.Scalar,
-#         patchCenter: sf.V2,
-#         mask: sf.DataBuffer("cameraMask"),
-# ) -> bool:
-#     if patchCenter[0] < (wx - 1) / 2 or patchCenter[0] > width_ - (wx - 1) / 2 - 1 \
-#         or patchCenter[1] < (wy - 1) / 2 or patchCenter[1] > height_ - (wy - 1) / 2 - 1:
-#         return False
-#     colSize = mask.shape[1] # This wont work for sf.DataBuffer since it is of (n, 1) i.e. 1D array
-#     if mask[(patchCenter[1] - (wy - 1) / 2) * colSize + (patchCenter[0] - (wx - 1) / 2)] < 125:
-#         return False
-#     if mask[(patchCenter[1] - (wy - 1) / 2) * colSize + (patchCenter[0] + (wx - 1) / 2)] < 125:
-#         return False
-#     if mask[(patchCenter[1] + (wy - 1) / 2) * colSize + (patchCenter[0] - (wx - 1) / 2)] < 125:
-#         return False
-#     if mask[(patchCenter[1] + (wy - 1) / 2) * colSize + (patchCenter[0] + (wx - 1) / 2)] < 125:
-#         return False
-#     return True
 
 def is_valid_1x1(
         width_: sf.Scalar, height_: sf.Scalar,
@@ -95,46 +66,6 @@ def is_valid_1x1(
         unsafe = True
     )
 
-# def patchInterpolation(
-#         img_row: sf.Scalar, img_col: sf.Scalar, 
-#         wx: sf.Scalar, wy: sf.Scalar,
-#         TsObs: sf.DataBuffer('TimeSurfaceNegative'),
-#         pixel: sf.V2,
-# ) -> sf.Matrix:
-#     SrcPatch_UpLeft = sf.V2(sf.floor(pixel[0] - (wx - 1) / 2), sf.floor(pixel[1] - (wy - 1) / 2))
-#     SrcPatch_DownRight = sf.V2(sf.floor(pixel[0] + (wx - 1) / 2), sf.floor(pixel[1] + (wy - 1) / 2))
-
-#     # Check if patch containing pixel is within the boundaries of the TS negative
-#     if SrcPatch_UpLeft[0] < 0 or SrcPatch_UpLeft[1] < 0:
-#         return sf.Matrix(wy, wx) # Return a zero matrix for False
-#     if SrcPatch_DownRight[0] >= img_col or SrcPatch_DownRight[1] >= img_row:
-#         return sf.Matrix(wy, wx)
-#     if SrcPatch_UpLeft[1] + wy >= img_row or SrcPatch_UpLeft[0] + wx >= img_col:
-#         return sf.Matrix(wy, wx)
-    
-#     # Calculating the weights
-#     q1 = (sf.floor(pixel[0]) + 1) - pixel[0]
-#     q2 = pixel[0] - sf.floor(pixel[0])
-#     q3 = (sf.floor(pixel[1]) + 1) - pixel[1]
-#     q4 = pixel[1] - sf.floor(pixel[1])
-
-#     wx2, wy2 = wx + 1, wy + 1
-#     # Convert DataBuffer to a Matrix
-#     cropped_Ts_list = []
-#     for i in range(wy2):
-#         Ts_row = []
-#         for j in range(wx2):
-#             TsPixel = TsObs[(SrcPatch_UpLeft[1] + i) * wx2 + (SrcPatch_UpLeft[0] + j)]
-#             Ts_row.append(TsPixel)
-
-#         cropped_Ts_list.extend(Ts_row)
-#     # Extract the relevant patch of TS negative and convert to matrix
-#     cropped_Ts = sf.Matrix(wy2, wx2, cropped_Ts_list)
-
-#     # Compute patch values
-#     R = q1 * cropped_Ts[:wy2, :wx] + q2 * cropped_Ts[:wy2, 1:wx + 1]
-#     patch = q3 * R[:wy, :wx] + q4 * R[1:wy + 1, :wx]
-#     return patch
 
 def valid_interpolation(
         pixel: sf.V2,
@@ -161,9 +92,9 @@ def bilinear_interpolation_1x1(
     pixel_x_floor, pixel_y_floor = sf.floor(pixel_x), sf.floor(pixel_y)
 
     q1 = (pixel_x_floor + 1) - pixel_x
-    q2 = pixel_x - pixel_x_floor
+    q2 = pixel_x - pixel_x_floor 
     q3 = (pixel_y_floor + 1) - pixel_y
-    q4 = pixel_y - pixel_y_floor
+    q4 = pixel_y - pixel_y_floor 
 
     linear_y0 = q1 * TsObs[pixel_y_floor * img_cols + pixel_x_floor] + q2 * TsObs[pixel_y_floor * img_cols + pixel_x_floor + 1]
     linear_y1 = q1 * TsObs[(pixel_y_floor + 1) * img_cols + pixel_x_floor] + q2 * TsObs[(pixel_y_floor + 1) * img_cols + pixel_x_floor + 1]
@@ -193,10 +124,11 @@ def spatio_temporal_residual(
     point_left_curr = R_warp * point + t_warp # Transform 3D point to the curr frame
     # world2cam
     pixel_left_curr_hom = R_cam * point_left_curr + t_cam
-    pixel_left_curr = pixel_left_curr_hom[:2] / pixel_left_curr_hom[2] # 3D to 2D pixel
+    pixel_left_curr = pixel_left_curr_hom[:2] / pixel_left_curr_hom[2]# 3D to 2D pixel
 
     # Find the corresponding TS value
-    ts_value = bilinear_interpolation_1x1(Ts_col, TsObs, pixel_left_curr)
+    ts_value = bilinear_interpolation_1x1(Ts_col, TsObs, pixel_left_curr) + sf.numeric_epsilon
+
 
     max_ts_value = 255.0
     # Check if interpolation was valid
@@ -212,7 +144,8 @@ def spatio_temporal_residual(
     condition = sf.greater(ts_value, huber_threshold) # Returns 1 if ts_value > huber threshold, 0 otherwise
     ts_value = condition * sf.sqrt(huber_threshold / ts_value) * ts_value + (1 - condition) * ts_value
 
-    return sf.V1(ts_value)
+    return sf.V1(sf.Max(ts_value, 0)) # TEMPORARY FIX by adding sf.Max
+    # Somehow there is one residual with -nan for our own code; that same residual has value of 0 in original code
 
 
 def generate(output_dir: Path) -> None:
